@@ -97,27 +97,44 @@ class HallEffectEditor(BasicEditor):
         super().__init__()
 
         self.layout_editor = layout_editor
-        self.tabs_widget = QTabWidget()  # Create tab widget
+        self.device = None  # Will be set in rebuild()
+        self.keyboard = None  # Store keyboard reference
 
-        # Populate the tabs dynamically
-        self.populate_tabs()
+        self.tabs_widget = QTabWidget()
 
-        # Add the tab widget to the main layout
         self.addWidget(self.tabs_widget)
-
-        self.device = None
         KeycodeDisplay.notify_keymap_override(self)
 
     def populate_tabs(self):
-        """Populate the QTabWidget with the Keymap Editor and three option tabs."""
+        """Populate the editor with only the tabs from vial.json."""
+        self.tabs_widget.clear()  # Reset tabs before repopulating
 
-        # --- Keymap Editor Tab ---
-        keymap_tab = QWidget()
+        available_tabs = self.keyboard.hall_effect_tabs if self.keyboard else []
+
+        tab_mapping = {
+            "Key Config": self.create_key_config_tab,
+            "Displacement": self.create_displacement_tab,
+            "Joystick": self.create_joystick_tab,
+            "Calibration": self.create_calibration_tab,
+        }
+
+        for tab_name in available_tabs:
+            if tab_name in tab_mapping:
+                tab_widget = tab_mapping[tab_name]()
+                self.tabs_widget.addTab(tab_widget, tr("HallEffectEditor", tab_name))
+
+    def create_key_config_tab(self):
+        tab = QWidget()
         keymap_layout = QVBoxLayout()
 
-        # Zoom buttons (compact, top-right)
-        zoom_layout = QVBoxLayout()  # Stack vertically without extra padding
-        zoom_layout.setSpacing(2)  # Reduce space between buttons
+        # Ensure container is created only if Key Config is present
+        self.container = KeyboardWidget(self.layout_editor)
+        self.container.clicked.connect(self.on_key_clicked)
+        self.container.deselected.connect(self.on_key_deselected)
+
+        # Zoom buttons (top-right, compact)
+        zoom_layout = QVBoxLayout()
+        zoom_layout.setSpacing(2)
 
         zoom_in_button = SquareButton("+")
         zoom_in_button.setFocusPolicy(Qt.NoFocus)
@@ -132,18 +149,13 @@ class HallEffectEditor(BasicEditor):
         zoom_layout.addWidget(zoom_in_button)
         zoom_layout.addWidget(zoom_out_button)
 
-        # Align zoom buttons in the top-right without taking extra space
+        # Align zoom buttons in the top-right
         top_bar_layout = QHBoxLayout()
-        top_bar_layout.addStretch()  # Push buttons to the right
+        top_bar_layout.addStretch()
         top_bar_layout.addLayout(zoom_layout)
-        top_bar_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
+        top_bar_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Keyboard
-        self.container = KeyboardWidget(self.layout_editor)
-        self.container.clicked.connect(self.on_key_clicked)
-        self.container.deselected.connect(self.on_key_deselected)
-
-        keymap_layout.addLayout(top_bar_layout)  # Add zoom buttons at the very top
+        keymap_layout.addLayout(top_bar_layout)  
         keymap_layout.addWidget(self.container, alignment=Qt.AlignCenter)
 
         # Integer Options
@@ -180,46 +192,51 @@ class HallEffectEditor(BasicEditor):
         options_and_text_layout.setAlignment(Qt.AlignCenter)
 
         keymap_layout.addLayout(options_and_text_layout)
-        keymap_tab.setLayout(keymap_layout)
-        self.tabs_widget.addTab(keymap_tab, tr("HallEffectEditor", "Key Config"))
 
         # Row/Col Display Label
         bottom_layout = QHBoxLayout()
-
-        self.key_info_label = QLabel("Key: None")  # Default text
+        self.key_info_label = QLabel("Key: None")
         self.key_info_label.setAlignment(Qt.AlignCenter)
-        self.key_info_label.setStyleSheet("padding: 2px;")  # Reduce extra space
+        self.key_info_label.setStyleSheet("padding: 2px;")
 
         bottom_layout.addWidget(self.key_info_label, alignment=Qt.AlignCenter)
-        bottom_layout.setContentsMargins(0, 2, 0, 2)  # Reduce margins
+        bottom_layout.setContentsMargins(0, 2, 0, 2)
         keymap_layout.addLayout(bottom_layout)
 
-        # --- Define Tab Names ---
-        tab_names = ["Displacement", "Joystick", "Calibration"]
+        tab.setLayout(keymap_layout)
+        return tab
+    
+    def create_displacement_tab(self):
+        return self.create_generic_options_tab("Displacement")
 
-        # --- Define Option Names ---
+    def create_joystick_tab(self):
+        return self.create_generic_options_tab("Joystick")
+
+    def create_calibration_tab(self):
+        return self.create_generic_options_tab("Calibration")
+
+    def create_generic_options_tab(self, tab_name):
+        tab = QWidget()
+        layout = QVBoxLayout()
+
         option_labels = ["Parameter A", "Parameter B", "Parameter C", "Parameter D", "Max Input", "Max Output"]
+        options_grid = QGridLayout()
 
-        # --- Create Three Centered Option Tabs ---
-        for i, tab_name in enumerate(tab_names):
-            options_tab = QWidget()
+        for i in range(4):  # Double options
+            opt = DoubleOption(option_labels[i], options_grid, i)
+            opt.changed.connect(self.on_option_changed)
 
-            options_grid = QGridLayout()
-            for j in range(4):
-                opt = DoubleOption(option_labels[j], options_grid, j)
-                opt.changed.connect(self.on_option_changed)
+        for i in range(2):  # Integer options
+            opt = IntegerOption(option_labels[i + 4], options_grid, i + 4)
+            opt.changed.connect(self.on_option_changed)
 
-            for j in range(2):
-                opt = IntegerOption(option_labels[j + 4], options_grid, j + 4)
-                opt.changed.connect(self.on_option_changed)
+        centered_layout = QVBoxLayout()
+        centered_layout.addLayout(options_grid)
+        centered_layout.setAlignment(Qt.AlignCenter)
 
-            # Wrap grid inside a centered QVBoxLayout
-            centered_layout = QVBoxLayout()
-            centered_layout.addLayout(options_grid)
-            centered_layout.setAlignment(Qt.AlignCenter)
-
-            options_tab.setLayout(centered_layout)
-            self.tabs_widget.addTab(options_tab, tr("HallEffectEditor", tab_name))
+        layout.addLayout(centered_layout)
+        tab.setLayout(layout)
+        return tab
 
     def on_option_changed(self):
         print("Option changed!")
@@ -236,38 +253,32 @@ class HallEffectEditor(BasicEditor):
             self.container.set_scale(self.container.get_scale() - 0.1)
         else:
             self.container.set_scale(self.container.get_scale() + 0.1)
+
         self.refresh_key_display()
 
     def rebuild(self, device):
         super().rebuild(device)
+        self.device = device
+
         if self.valid():
             self.keyboard = device.keyboard
+            self.populate_tabs()  # Ensure tabs are updated when switching device
 
-            # get number of layers
-            self.container.set_keys(self.keyboard.keys, self.keyboard.encoders)
+            # Ensure Key Config tab is active before using container
+            if "Key Config" in self.keyboard.hall_effect_tabs:
+                self.container.set_keys(self.keyboard.keys, self.keyboard.encoders)
+                self.current_layer = 0
+                self.on_layout_changed()
+                self.refresh_key_display()
+            
+        else:
+            self.tabs_widget.clear()  # Remove all tabs if Hall Effect isn't supported
 
-            self.current_layer = 0
-            self.on_layout_changed()
-
-            self.refresh_key_display()
-        self.container.setEnabled(self.valid())
+        self.tabs_widget.setEnabled(self.valid())
 
     def valid(self):
-        return isinstance(self.device, VialKeyboard)
-
-    def save_layout(self):
-        return self.keyboard.save_layout()
-
-    def restore_layout(self, data):
-        if json.loads(data.decode("utf-8")).get("uid") != self.keyboard.keyboard_id:
-            ret = QMessageBox.question(self.widget(), "",
-                                       tr("HallEffectEditor", "Saved keymap belongs to a different keyboard,"
-                                                          " are you sure you want to continue?"),
-                                       QMessageBox.Yes | QMessageBox.No)
-            if ret != QMessageBox.Yes:
-                return
-        self.keyboard.restore_layout(data)
-        self.refresh_key_display()
+        """Determine if HallEffectEditor should be visible."""
+        return isinstance(self.device, VialKeyboard) and self.device.keyboard.has_hall_effect
 
     def on_any_keycode(self):
         if self.container.active_key is None:
@@ -295,14 +306,15 @@ class HallEffectEditor(BasicEditor):
 
     def refresh_key_display(self):
         """ Refresh text on key widgets to display updated keymap """
-        self.container.update_layout()
+        if "Key Config" in (self.keyboard.hall_effect_tabs if self.keyboard else []):
+            self.container.update_layout()
 
-        for widget in self.container.widgets:
-            code = self.code_for_widget(widget)
-            KeycodeDisplay.display_keycode(widget, code)
+            for widget in self.container.widgets:
+                code = self.code_for_widget(widget)
+                KeycodeDisplay.display_keycode(widget, code)
 
-        self.container.update()
-        self.container.updateGeometry()
+            self.container.update()
+            self.container.updateGeometry()
 
 
     def switch_layer(self, idx):

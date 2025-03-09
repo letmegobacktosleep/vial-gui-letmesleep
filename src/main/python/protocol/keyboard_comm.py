@@ -191,6 +191,16 @@ class Keyboard(ProtocolMacro, ProtocolDynamic, ProtocolTapDance, ProtocolCombo, 
                 idx, opt = key.labels[8].split(",")
                 key.layout_index, key.layout_option = int(idx), int(opt)
 
+        # Extract Hall Effect menu information
+        self.hall_effect_tabs = []
+        menus = payload.get("menus", [])
+        for menu in menus:
+            if menu.get("label") == "Hall Effect":
+                self.hall_effect_tabs = [item["label"] for item in menu.get("content", [])]
+            
+        # If no Hall Effect tabs exist, hide the editor
+        self.has_hall_effect = bool(self.hall_effect_tabs)
+
     def reload_keymap(self):
         """ Load current key mapping from the keyboard """
 
