@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import json
+import struct
 
 from PyQt5.QtWidgets import QHBoxLayout, QGridLayout, QLabel, QTextEdit, QVBoxLayout, QMessageBox, QWidget, QTabWidget, QSpinBox, QDoubleSpinBox
 from PyQt5.QtCore import Qt, pyqtSignal, QObject
 
-from any_keycode_dialog import AnyKeycodeDialog
 from editor.basic_editor import BasicEditor
 from widgets.keyboard_widget import KeyboardWidget
-from keycodes.keycodes import Keycode
 from widgets.square_button import SquareButton
-from tabbed_keycodes import TabbedKeycodes, keycode_filter_masked
 from util import tr, KeycodeDisplay
 from vial_device import VialKeyboard
+from util import MSG_LEN, hid_send
 
 class GenericOption(QObject):
     changed = pyqtSignal()
@@ -58,7 +57,7 @@ class IntegerOption(GenericOption):
 
 
 class DoubleOption(GenericOption):
-    def __init__(self, title, container, row, min_val=-100.0, max_val=100.0, decimals=16):
+    def __init__(self, title, container, row, min_val=-1000.0, max_val=1000.0, decimals=16):
         super().__init__(title, container, row)
 
         self.spinbox = QDoubleSpinBox()
@@ -160,11 +159,15 @@ class HallEffectEditor(BasicEditor):
         keymap_layout.addWidget(self.container, alignment=Qt.AlignCenter)
 
         # Integer Options
-        keymap_option_labels = ["Mode", "Actuation Point", "Deadzone", "Up Sensitivity", "Down Sensitivity"]
         keymap_options_layout = QGridLayout()
-
         self.keymap_int_options = []
-        for i, label in enumerate(keymap_option_labels):
+        for i, (label, value_id) in enumerate([
+            ("Mode", 1),
+            ("Actuation Point", 2),
+            ("Deadzone", 3),
+            ("Up Sensitivity", 4),
+            ("Down Sensitivity", 5),
+        ]):
             opt = IntegerOption(label, keymap_options_layout, i, min_val=0, max_val=255)
             opt.changed.connect(self.on_option_changed)
             self.keymap_int_options.append(opt)
@@ -208,27 +211,35 @@ class HallEffectEditor(BasicEditor):
         return tab
     
     def create_displacement_tab(self):
-        return self.create_generic_options_tab("Displacement")
+        return self.create_lut_options_tab(2)
 
     def create_joystick_tab(self):
-        return self.create_generic_options_tab("Joystick")
+        return self.create_lut_options_tab(3)
 
     def create_calibration_tab(self):
-        return self.create_generic_options_tab("Calibration")
+        return self.create_lut_options_tab(1)
 
-    def create_generic_options_tab(self, tab_name):
+    def create_lut_options_tab(self, lut_id):
         tab = QWidget()
         layout = QVBoxLayout()
 
-        option_labels = ["Parameter A", "Parameter B", "Parameter C", "Parameter D", "Max Input", "Max Output"]
         options_grid = QGridLayout()
 
-        for i in range(4):  # Double options
-            opt = DoubleOption(option_labels[i], options_grid, i)
+        for i, (label, value_id) in enumerate([
+            ("Parameter A", 1),
+            ("Parameter B", 2),
+            ("Parameter C", 3),
+            ("Parameter D", 4),
+        ]):
+            opt = DoubleOption(label, options_grid, i, min_val=-1000, max_val=1000)
             opt.changed.connect(self.on_option_changed)
 
-        for i in range(2):  # Integer options
-            opt = IntegerOption(option_labels[i + 4], options_grid, i + 4)
+
+        for i, (label, value_id) in enumerate([
+            ("Max Input", 5),
+            ("Max Output", 6),
+        ]):
+            opt = DoubleOption(label, options_grid, i + 4, min_val=0, max_val=2047, decimals=0)
             opt.changed.connect(self.on_option_changed)
 
         centered_layout = QVBoxLayout()
@@ -241,6 +252,14 @@ class HallEffectEditor(BasicEditor):
 
     def on_option_changed(self):
         print("Option changed!")
+
+        command_id     = 0xFF  # Always unhandled
+        sub_command_id = None
+        channel_id     = 0x00  # Always 0x00
+
+        #data = struct.pack("BBB", command_id, sub_command_id, channel_id)
+        #hid_send(self.device.dev, data, retries=20)
+
 
     def on_empty_space_clicked(self):
         self.container.deselect()
@@ -281,12 +300,13 @@ class HallEffectEditor(BasicEditor):
         """Determine if HallEffectEditor should be visible."""
         return isinstance(self.device, VialKeyboard) and self.device.keyboard.has_hall_effect
 
-    def on_dlg_finished(self, res):
-        if res > 0:
-            self.on_keycode_changed(self.dlg.value)
-
     def code_for_widget(self, widget):
         if widget.desc.row is not None:
+            # Try and load the values from the keyboard here
+            #
+            #
+            #
+            #
             return self.keyboard.layout[(self.current_layer, widget.desc.row, widget.desc.col)]
 
     def refresh_key_display(self):
@@ -301,38 +321,6 @@ class HallEffectEditor(BasicEditor):
             self.container.update()
             self.container.updateGeometry()
 
-
-    def switch_layer(self, idx):
-        self.container.deselect()
-        self.current_layer = idx
-        self.refresh_key_display()
-
-    def set_key(self, keycode):
-        """ Change currently selected key to provided keycode """
-
-        if self.container.active_key is None:
-            return
-
-        self.set_key_matrix(keycode)
-
-        self.container.select_next()
-
-    def set_key_matrix(self, keycode):
-        l, r, c = self.current_layer, self.container.active_key.desc.row, self.container.active_key.desc.col
-
-        if r >= 0 and c >= 0:
-            # if masked, ensure that this is a byte-sized keycode
-            if self.container.active_mask:
-                if not Keycode.is_basic(keycode):
-                    return
-                kc = Keycode.find_outer_keycode(self.keyboard.layout[(l, r, c)])
-                if kc is None:
-                    return
-                keycode = kc.qmk_id.replace("(kc)", "({})".format(keycode))
-
-            self.keyboard.set_key(l, r, c, keycode)
-            self.refresh_key_display()
-
     def on_key_clicked(self):
         """Called when a key on the keyboard is clicked."""
         self.refresh_key_display()
@@ -343,7 +331,6 @@ class HallEffectEditor(BasicEditor):
                 self.key_info_label.setText(f"Key: Row {row}, Col {col}")
             else:
                 self.key_info_label.setText("Key: None")
-
 
     def on_key_deselected(self):
         pass  # No longer need to reset TabbedKeycodes
