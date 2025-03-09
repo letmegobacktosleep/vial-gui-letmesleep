@@ -279,19 +279,6 @@ class HallEffectEditor(BasicEditor):
         """Determine if HallEffectEditor should be visible."""
         return isinstance(self.device, VialKeyboard) and self.device.keyboard.has_hall_effect
 
-    def on_any_keycode(self):
-        if self.container.active_key is None:
-            return
-        current_code = self.code_for_widget(self.container.active_key)
-        if self.container.active_mask:
-            kc = Keycode.find_inner_keycode(current_code)
-            current_code = kc.qmk_id
-
-        self.dlg = AnyKeycodeDialog(current_code)
-        self.dlg.finished.connect(self.on_dlg_finished)
-        self.dlg.setModal(True)
-        self.dlg.show()
-
     def on_dlg_finished(self, res):
         if res > 0:
             self.on_keycode_changed(self.dlg.value)
