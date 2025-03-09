@@ -104,6 +104,8 @@ class HallEffectEditor(BasicEditor):
 
         self.addWidget(self.tabs_widget)
 
+        layout_editor.changed.connect(self.on_layout_changed)
+
     def populate_tabs(self):
         """Populate the editor with only the tabs from vial.json."""
         self.tabs_widget.clear()  # Reset tabs before repopulating
