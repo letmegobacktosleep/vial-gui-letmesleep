@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject
 
 from any_keycode_dialog import AnyKeycodeDialog
 from editor.basic_editor import BasicEditor
-from widgets.keyboard_widget import KeyboardWidget, EncoderWidget
+from widgets.keyboard_widget import KeyboardWidget
 from keycodes.keycodes import Keycode
 from widgets.square_button import SquareButton
 from tabbed_keycodes import TabbedKeycodes, keycode_filter_masked
@@ -103,7 +103,6 @@ class HallEffectEditor(BasicEditor):
         self.tabs_widget = QTabWidget()
 
         self.addWidget(self.tabs_widget)
-        KeycodeDisplay.notify_keymap_override(self)
 
     def populate_tabs(self):
         """Populate the editor with only the tabs from vial.json."""
@@ -266,7 +265,7 @@ class HallEffectEditor(BasicEditor):
 
             # Ensure Key Config tab is active before using container
             if "Key Config" in self.keyboard.hall_effect_tabs:
-                self.container.set_keys(self.keyboard.keys, self.keyboard.encoders)
+                self.container.set_keys(self.keyboard.keys, [])
                 self.current_layer = 0
                 self.on_layout_changed()
                 self.refresh_key_display()
@@ -300,9 +299,6 @@ class HallEffectEditor(BasicEditor):
     def code_for_widget(self, widget):
         if widget.desc.row is not None:
             return self.keyboard.layout[(self.current_layer, widget.desc.row, widget.desc.col)]
-        else:
-            return self.keyboard.encoder_layout[(self.current_layer, widget.desc.encoder_idx,
-                                                 widget.desc.encoder_dir)]
 
     def refresh_key_display(self):
         """ Refresh text on key widgets to display updated keymap """
@@ -328,28 +324,9 @@ class HallEffectEditor(BasicEditor):
         if self.container.active_key is None:
             return
 
-        if isinstance(self.container.active_key, EncoderWidget):
-            self.set_key_encoder(keycode)
-        else:
-            self.set_key_matrix(keycode)
+        self.set_key_matrix(keycode)
 
         self.container.select_next()
-
-    def set_key_encoder(self, keycode):
-        l, i, d = self.current_layer, self.container.active_key.desc.encoder_idx,\
-                            self.container.active_key.desc.encoder_dir
-
-        # if masked, ensure that this is a byte-sized keycode
-        if self.container.active_mask:
-            if not Keycode.is_basic(keycode):
-                return
-            kc = Keycode.find_outer_keycode(self.keyboard.encoder_layout[(l, i, d)])
-            if kc is None:
-                return
-            keycode = kc.qmk_id.replace("(kc)", "({})".format(keycode))
-
-        self.keyboard.set_encoder(l, i, d, keycode)
-        self.refresh_key_display()
 
     def set_key_matrix(self, keycode):
         l, r, c = self.current_layer, self.container.active_key.desc.row, self.container.active_key.desc.col
