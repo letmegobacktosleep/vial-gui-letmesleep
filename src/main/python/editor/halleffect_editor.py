@@ -294,7 +294,7 @@ class HallEffectEditor(BasicEditor):
 
         # Undo Button
         self.btn_undo = QPushButton(tr("LUT", "Reload"))
-        self.btn_undo.clicked.connect(lambda: self.reload_lut_config(lut_id))
+        self.btn_undo.clicked.connect(lambda: self.reload_lut_config(lut_id=lut_id))
         buttons_layout.addWidget(self.btn_undo)
 
         layout.addLayout(buttons_layout)
@@ -328,14 +328,12 @@ class HallEffectEditor(BasicEditor):
                     "d",
                     value
                 )
-
-                print(data[5:])
                 
                 data = self.usb_send(self.device.dev, data, retries=20)
-                print(f"Actual Value: {data[5:13]} -> {struct.unpack('d', data[5:13])[0]}")
-                print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
+                # print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
 
-        print("Save Complete.\n")
+        # Reload config from device
+        self.reload_lut_config(lut_id=lut_id)
 
     def reload_lut_config(self, lut_id=None):
         print(f"Reloading LUT Config for LUT ID: {lut_id}")
@@ -357,9 +355,7 @@ class HallEffectEditor(BasicEditor):
                 stored_value = struct.unpack("d", data[5:13])[0]
 
                 opt.set_value(stored_value)  # Update UI
-                print(f"Reset LUT ID: {l_id}, Value ID: {v_id} to {stored_value}")
-
-        print("Reload Complete.\n")
+                # print(f"Reset LUT ID: {l_id}, Value ID: {v_id} to {stored_value}")
 
     def store_integer_value(self, name):
         value = self.keymap_int_options[name].value()  # Assuming integer_options stores the widgets
