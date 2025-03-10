@@ -310,20 +310,30 @@ class HallEffectEditor(BasicEditor):
         for (l_id, v_id), opt in self.lut_options.items():
             if l_id == lut_id:
                 value = opt.value()  # Get actual value from the widget
+
+                print(struct.pack(
+                    "d",
+                    value
+                ))
                 
                 # Send value to the device
                 data = struct.pack(
-                    "BBBBBd",
+                    "BBBBB",
                     self.command_id,
                     self.sub_command_ids["id_custom_set_lut_config"],
                     self.channel_id,
                     l_id,
-                    v_id,
-                    float(value)
+                    v_id
+                ) + struct.pack(
+                    "d",
+                    value
                 )
+
+                print(data[5:])
+                
                 data = self.usb_send(self.device.dev, data, retries=20)
-                print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
                 print(f"Actual Value: {data[5:13]} -> {struct.unpack('d', data[5:13])[0]}")
+                print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
 
         print("Save Complete.\n")
 
