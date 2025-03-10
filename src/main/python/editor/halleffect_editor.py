@@ -112,11 +112,11 @@ class HallEffectEditor(BasicEditor):
         self.last_clicked_key = None
         self.last_click_count = 0
         self.integer_option_values = {
-            "Mode": 0,
-            "Actuation Point":  0,
-            "Deadzone":         0,
-            "Up Sensitivity":   0,
-            "Down Sensitivity": 0,
+            "Mode": 2,
+            "Actuation Point":  75,
+            "Deadzone":         5,
+            "Up Sensitivity":   25,
+            "Down Sensitivity": 25,
         }
 
         self.tabs_widget = QTabWidget()
@@ -181,14 +181,9 @@ class HallEffectEditor(BasicEditor):
         # Integer Options
         keymap_options_layout = QGridLayout()
         self.keymap_int_options = {}
-        for i, label in enumerate([
-            "Mode",
-            "Actuation Point",
-            "Deadzone",
-            "Up Sensitivity",
-            "Down Sensitivity",
-        ]):
+        for i, label in enumerate(self.integer_option_values):
             opt = IntegerOption(label, keymap_options_layout, i, min_val=0, max_val=255)
+            opt.set_value(self.integer_option_values[label])
             opt.changed.connect(lambda name=label: self.store_integer_value(name))
             self.keymap_int_options[label] = opt
 
@@ -220,7 +215,7 @@ class HallEffectEditor(BasicEditor):
             "to write the config\n"
             "to the key clicked"
         )
-        usage_description.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        usage_description.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         usage_description.setStyleSheet("border: none; padding-right: 10px;")
 
         # Horizontal layout for options and text box
@@ -409,9 +404,9 @@ class HallEffectEditor(BasicEditor):
                 self.last_clicked_key = (row, col)
                 self.last_click_count = 1  # Reset click count for new key
 
-            exclamation_marks = ""
+            status_text = ""
             if self.last_click_count > 1:
-                exclamation_marks = "!!!"
+                status_text = "SAVED"
 
                 data = struct.pack(
                     "BBBBBBBBBB",
@@ -429,8 +424,7 @@ class HallEffectEditor(BasicEditor):
 
                 data = self.usb_send(self.device.dev, data, retries=20)
             
-            self.key_info_label.setText(f"Key: Row {row}, Col {col} {exclamation_marks}")
-            print("Integer Option Values:", self.integer_option_values)
+            self.key_info_label.setText(f"Key: Row {row}, Col {col} {status_text}")
 
         else:
             self.key_info_label.setText("Key: None")
