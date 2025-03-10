@@ -106,7 +106,8 @@ class HallEffectEditor(BasicEditor):
             "id_custom_get_key_config": 1,
             "id_custom_set_key_config": 2,
             "id_custom_get_lut_config": 3,
-            "id_custom_set_lut_config": 4
+            "id_custom_set_lut_config": 4,
+            "id_custom_save_lut_config": 5
         }
 
         self.last_clicked_key = None
@@ -327,11 +328,21 @@ class HallEffectEditor(BasicEditor):
                 data = self.usb_send(self.device.dev, data, retries=20)
                 # print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
 
+        # Send the save command
+        data = struct.pack(
+            "BBBB",
+            self.command_id,
+            self.sub_command_ids["id_custom_save_lut_config"],
+            self.channel_id,
+            l_id
+        )
+        
+        data = self.usb_send(self.device.dev, data, retries=20)
+
         # Reload config from device
         self.reload_lut_config(lut_id=lut_id)
 
     def reload_lut_config(self, lut_id=None):
-        print(f"Reloading LUT Config for LUT ID: {lut_id}")
 
         for (l_id, v_id), opt in self.lut_options.items():
             if l_id == lut_id or lut_id == None:
