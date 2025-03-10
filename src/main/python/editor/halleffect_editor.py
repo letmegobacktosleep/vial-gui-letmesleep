@@ -310,11 +310,6 @@ class HallEffectEditor(BasicEditor):
         for (l_id, v_id), opt in self.lut_options.items():
             if l_id == lut_id:
                 value = opt.value()  # Get actual value from the widget
-
-                print(struct.pack(
-                    "d",
-                    value
-                ))
                 
                 # Send value to the device
                 data = struct.pack(
