@@ -2,7 +2,7 @@
 import json
 import struct
 
-from PyQt5.QtWidgets import QHBoxLayout, QGridLayout, QLabel, QTextEdit, QVBoxLayout, QMessageBox, QWidget, QTabWidget, QSpinBox, QDoubleSpinBox
+from PyQt5.QtWidgets import QHBoxLayout, QGridLayout, QLabel, QTextEdit, QVBoxLayout, QMessageBox, QWidget, QTabWidget, QSpinBox, QDoubleSpinBox, QPushButton
 from PyQt5.QtCore import Qt, pyqtSignal, QObject
 
 from editor.basic_editor import BasicEditor
@@ -119,6 +119,8 @@ class HallEffectEditor(BasicEditor):
             "Down Sensitivity": 25,
         }
 
+        self.lut_options = {}
+
         self.tabs_widget = QTabWidget()
 
         self.addWidget(self.tabs_widget)
@@ -133,9 +135,9 @@ class HallEffectEditor(BasicEditor):
 
         tab_mapping = {
             "Key Config": self.create_key_config_tab,
+            "Calibration": self.create_calibration_tab,
             "Displacement": self.create_displacement_tab,
             "Joystick": self.create_joystick_tab,
-            "Calibration": self.create_calibration_tab,
         }
 
         for tab_name in available_tabs:
@@ -240,55 +242,114 @@ class HallEffectEditor(BasicEditor):
         tab.setLayout(keymap_layout)
         return tab
     
+    def create_calibration_tab(self):
+        return self.create_lut_options_tab(1)
+
     def create_displacement_tab(self):
         return self.create_lut_options_tab(2)
 
     def create_joystick_tab(self):
         return self.create_lut_options_tab(3)
 
-    def create_calibration_tab(self):
-        return self.create_lut_options_tab(1)
-
     def create_lut_options_tab(self, lut_id):
         tab = QWidget()
         layout = QVBoxLayout()
 
+        # Grid layout for options
         options_grid = QGridLayout()
 
-        for i, (label, value_id) in enumerate([
-            ("Parameter A", 1),
-            ("Parameter B", 2),
-            ("Parameter C", 3),
-            ("Parameter D", 4),
-        ]):
-            opt = DoubleOption(label, options_grid, i, min_val=-1000, max_val=1000)
-            opt.changed.connect(self.on_option_changed)
+        # Define LUT options
+        lut_fields = [
+            ("Parameter A", 1, -100, 100, 16),
+            ("Parameter B", 2, -100, 100, 16),
+            ("Parameter C", 3, -100, 100, 16),
+            ("Parameter D", 4, -1000, 1000, 16),
+            ("Max Input", 5, 0, 2047, 0),
+            ("Max Output", 6, 0, 2047, 0),
+        ]
 
+        for i, (label, value_id, min_val, max_val, precision) in enumerate(lut_fields):
+            opt = DoubleOption(label, options_grid, i, min_val=min_val, max_val=max_val, decimals=precision)
+            
+            # Store option reference for later retrieval
+            self.lut_options[(lut_id, value_id)] = opt
 
-        for i, (label, value_id) in enumerate([
-            ("Max Input", 5),
-            ("Max Output", 6),
-        ]):
-            opt = DoubleOption(label, options_grid, i + 4, min_val=0, max_val=2047, decimals=0)
-            opt.changed.connect(self.on_option_changed)
+            # Connect change signal
+            opt.changed.connect(self.lut_option_changed)
 
         centered_layout = QVBoxLayout()
         centered_layout.addLayout(options_grid)
         centered_layout.setAlignment(Qt.AlignCenter)
 
         layout.addLayout(centered_layout)
+
+        # Buttons Layout
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+
+        # Save Button
+        self.btn_save = QPushButton(tr("LUT", "Save"))
+        self.btn_save.clicked.connect(lambda: self.save_lut_config(lut_id))
+        buttons_layout.addWidget(self.btn_save)
+
+        # Undo Button
+        self.btn_undo = QPushButton(tr("LUT", "Reload"))
+        self.btn_undo.clicked.connect(lambda: self.reload_lut_config(lut_id))
+        buttons_layout.addWidget(self.btn_undo)
+
+        layout.addLayout(buttons_layout)
         tab.setLayout(layout)
+
         return tab
+    
+    def lut_option_changed(self):
+        pass
 
-    def on_option_changed(self):
-        print("Option changed!")
+    def save_lut_config(self, lut_id):
 
-        command_id     = 0xFF  # Always unhandled
-        sub_command_id = None
-        channel_id     = 0x00  # Always 0x00
+        for (l_id, v_id), opt in self.lut_options.items():
+            if l_id == lut_id:
+                value = opt.value()  # Get actual value from the widget
+                
+                # Send value to the device
+                data = struct.pack(
+                    "BBBBBd",
+                    self.command_id,
+                    self.sub_command_ids["id_custom_set_lut_config"],
+                    self.channel_id,
+                    l_id,
+                    v_id,
+                    float(value)
+                )
+                data = self.usb_send(self.device.dev, data, retries=20)
+                print(f"Saved LUT ID: {l_id}, Value ID: {v_id} to {value}")
+                print(f"Actual Value: {data[5:13]} -> {struct.unpack('d', data[5:13])[0]}")
 
-        #data = struct.pack("BBB", command_id, sub_command_id, channel_id)
-        #self.usb_send(self.device.dev, data, retries=20)
+        print("Save Complete.\n")
+
+    def reload_lut_config(self, lut_id=None):
+        print(f"Reloading LUT Config for LUT ID: {lut_id}")
+
+        for (l_id, v_id), opt in self.lut_options.items():
+            if l_id == lut_id or lut_id == None:
+                # Fetch value from the device
+                data = struct.pack(
+                    "BBBBB",
+                    self.command_id,
+                    self.sub_command_ids["id_custom_get_lut_config"],
+                    self.channel_id,
+                    l_id,
+                    v_id
+                )
+                data = self.usb_send(self.device.dev, data, retries=20)
+
+                # Unpack the response (assuming it's a double value)
+                stored_value = struct.unpack("d", data[5:13])[0]
+
+                opt.set_value(stored_value)  # Update UI
+                print(f"Reset LUT ID: {l_id}, Value ID: {v_id} to {stored_value}")
+
+        print("Reload Complete.\n")
 
     def store_integer_value(self, name):
         value = self.keymap_int_options[name].value()  # Assuming integer_options stores the widgets
@@ -326,6 +387,8 @@ class HallEffectEditor(BasicEditor):
                 self.on_layout_changed()
                 # self.refresh_key_display()
                 # do not need to refresh, this is already done in on_layout_changed
+
+            self.reload_lut_config()
             
         else:
             self.tabs_widget.clear()  # Remove all tabs if Hall Effect isn't supported
