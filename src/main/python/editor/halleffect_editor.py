@@ -92,12 +92,32 @@ class ClickableWidget(QWidget):
 
 class HallEffectEditor(BasicEditor):
 
-    def __init__(self, layout_editor):
+    def __init__(self, layout_editor, usb_send=hid_send):
         super().__init__()
 
         self.layout_editor = layout_editor
         self.device = None  # Will be set in rebuild()
         self.keyboard = None  # Store keyboard reference
+        self.usb_send = usb_send
+
+        self.command_id = 0xFF # id_unhandled
+        self.channel_id = 0x00 # id_custom_channel
+        self.sub_command_ids = {
+            "id_custom_get_key_config": 1,
+            "id_custom_set_key_config": 2,
+            "id_custom_get_lut_config": 3,
+            "id_custom_set_lut_config": 4
+        }
+
+        self.last_clicked_key = None
+        self.last_click_count = 0
+        self.integer_option_values = {
+            "Mode": 0,
+            "Actuation Point":  0,
+            "Deadzone":         0,
+            "Up Sensitivity":   0,
+            "Down Sensitivity": 0,
+        }
 
         self.tabs_widget = QTabWidget()
 
@@ -160,17 +180,17 @@ class HallEffectEditor(BasicEditor):
 
         # Integer Options
         keymap_options_layout = QGridLayout()
-        self.keymap_int_options = []
-        for i, (label, value_id) in enumerate([
-            ("Mode", 1),
-            ("Actuation Point", 2),
-            ("Deadzone", 3),
-            ("Up Sensitivity", 4),
-            ("Down Sensitivity", 5),
+        self.keymap_int_options = {}
+        for i, label in enumerate([
+            "Mode",
+            "Actuation Point",
+            "Deadzone",
+            "Up Sensitivity",
+            "Down Sensitivity",
         ]):
             opt = IntegerOption(label, keymap_options_layout, i, min_val=0, max_val=255)
-            opt.changed.connect(self.on_option_changed)
-            self.keymap_int_options.append(opt)
+            opt.changed.connect(lambda name=label: self.store_integer_value(name))
+            self.keymap_int_options[label] = opt
 
         # Wrap options inside a centered vertical layout
         options_layout = QVBoxLayout()
@@ -189,8 +209,23 @@ class HallEffectEditor(BasicEditor):
         mode_description.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         mode_description.setStyleSheet("border: none; padding-left: 10px;")
 
+        # Usage Description Text Box
+        usage_description = QLabel(
+            "Set the key config\n"
+            "in the boxes\n"
+            "on the right\n\n"
+            "Click on a key,\n"
+            "twice in a row,\n"
+            "but not too quickly,\n"
+            "to write the config\n"
+            "to the key clicked"
+        )
+        usage_description.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        usage_description.setStyleSheet("border: none; padding-right: 10px;")
+
         # Horizontal layout for options and text box
         options_and_text_layout = QHBoxLayout()
+        options_and_text_layout.addWidget(usage_description)
         options_and_text_layout.addLayout(options_layout)
         options_and_text_layout.addWidget(mode_description)
         options_and_text_layout.setAlignment(Qt.AlignCenter)
@@ -258,8 +293,11 @@ class HallEffectEditor(BasicEditor):
         channel_id     = 0x00  # Always 0x00
 
         #data = struct.pack("BBB", command_id, sub_command_id, channel_id)
-        #hid_send(self.device.dev, data, retries=20)
+        #self.usb_send(self.device.dev, data, retries=20)
 
+    def store_integer_value(self, name):
+        value = self.keymap_int_options[name].value()  # Assuming integer_options stores the widgets
+        self.integer_option_values[name] = value
 
     def on_empty_space_clicked(self):
         self.container.deselect()
@@ -274,7 +312,9 @@ class HallEffectEditor(BasicEditor):
         else:
             self.container.set_scale(self.container.get_scale() + 0.1)
 
-        self.refresh_key_display()
+        self.refresh_key_display(
+            refresh_all=False
+        )
 
     def rebuild(self, device):
         super().rebuild(device)
@@ -289,7 +329,8 @@ class HallEffectEditor(BasicEditor):
                 self.container.set_keys(self.keyboard.keys, [])
                 self.current_layer = 0
                 self.on_layout_changed()
-                self.refresh_key_display()
+                # self.refresh_key_display()
+                # do not need to refresh, this is already done in on_layout_changed
             
         else:
             self.tabs_widget.clear()  # Remove all tabs if Hall Effect isn't supported
@@ -301,39 +342,109 @@ class HallEffectEditor(BasicEditor):
         return isinstance(self.device, VialKeyboard) and self.device.keyboard.has_hall_effect
 
     def code_for_widget(self, widget):
-        if widget.desc.row is not None:
+        if (
+            widget.desc.row is not None 
+        ):
             # Try and load the values from the keyboard here
-            #
-            #
-            #
-            #
-            return self.keyboard.layout[(self.current_layer, widget.desc.row, widget.desc.col)]
+            data = struct.pack(
+                "BBBBB",
+                self.command_id,
+                self.sub_command_ids["id_custom_get_key_config"],
+                self.channel_id,
+                widget.desc.row,
+                widget.desc.col
+            )
 
-    def refresh_key_display(self):
+            data = self.usb_send(self.device.dev, data, retries=20)
+
+            (
+                mode,
+                actuation_point,
+                deadzone,
+                up_sensitivity,
+                down_sensitivity
+            ) = struct.unpack(
+                "BBBBB",
+                data[5:10]
+            )
+
+            config_text = (f"Mode: {mode}\n"
+                           f"{actuation_point}, "
+                           f"{deadzone}\n"
+                           f"{up_sensitivity}, "
+                           f"{down_sensitivity}"
+            )
+
+            return config_text
+
+    def refresh_key_display(self, refresh_all=True, coordinate=(0,0)):
         """ Refresh text on key widgets to display updated keymap """
         if "Key Config" in (self.keyboard.hall_effect_tabs if self.keyboard else []):
             self.container.update_layout()
 
             for widget in self.container.widgets:
-                code = self.code_for_widget(widget)
-                KeycodeDisplay.display_keycode(widget, code)
+                if (refresh_all):
+                    widget.setText(self.code_for_widget(widget))
+                elif (widget.desc.row, widget.desc.col) == coordinate:
+                    widget.setText(self.code_for_widget(widget))
 
             self.container.update()
             self.container.updateGeometry()
 
     def on_key_clicked(self):
         """Called when a key on the keyboard is clicked."""
-        self.refresh_key_display()
+
+        row = 0
+        col = 0
+        refresh_all = True
+
         if self.container.active_key:
             row = self.container.active_key.desc.row
             col = self.container.active_key.desc.col
-            if row is not None and col is not None:
-                self.key_info_label.setText(f"Key: Row {row}, Col {col}")
+            refresh_all = False
+
+            if (row, col) == self.last_clicked_key:
+                self.last_click_count += 1  # Increment click count if same key
             else:
-                self.key_info_label.setText("Key: None")
+                self.last_clicked_key = (row, col)
+                self.last_click_count = 1  # Reset click count for new key
+
+            exclamation_marks = ""
+            if self.last_click_count > 1:
+                exclamation_marks = "!!!"
+
+                data = struct.pack(
+                    "BBBBBBBBBB",
+                    self.command_id,
+                    self.sub_command_ids["id_custom_set_key_config"],
+                    self.channel_id,
+                    row,
+                    col,
+                    self.integer_option_values["Mode"],
+                    self.integer_option_values["Actuation Point"],
+                    self.integer_option_values["Deadzone"],
+                    self.integer_option_values["Up Sensitivity"],
+                    self.integer_option_values["Down Sensitivity"]
+                )
+
+                data = self.usb_send(self.device.dev, data, retries=20)
+            
+            self.key_info_label.setText(f"Key: Row {row}, Col {col} {exclamation_marks}")
+            print("Integer Option Values:", self.integer_option_values)
+
+        else:
+            self.key_info_label.setText("Key: None")
+            self.last_clicked_key = None
+            self.last_click_count = 0  # Reset when no key is selected
+
+        self.refresh_key_display(
+            refresh_all=False,
+            coordinate=(row, col)
+        )
+
 
     def on_key_deselected(self):
-        pass  # No longer need to reset TabbedKeycodes
+        pass
 
     def on_layout_changed(self):
         if self.keyboard is None:
@@ -343,4 +454,4 @@ class HallEffectEditor(BasicEditor):
         self.keyboard.set_layout_options(self.layout_editor.pack())
 
     def on_keymap_override(self):
-        self.refresh_key_display()
+        pass
