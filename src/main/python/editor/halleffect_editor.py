@@ -141,8 +141,8 @@ class HallEffectEditor(BasicEditor):
             "Joystick": self.create_joystick_tab,
         }
 
-        for tab_name in available_tabs:
-            if tab_name in tab_mapping:
+        for tab_name in tab_mapping:
+            if tab_name in available_tabs:
                 tab_widget = tab_mapping[tab_name]()
                 self.tabs_widget.addTab(tab_widget, tr("HallEffectEditor", tab_name))
 
@@ -337,7 +337,9 @@ class HallEffectEditor(BasicEditor):
             l_id
         )
         
+        print(data)
         data = self.usb_send(self.device.dev, data, retries=20)
+        print(data)
 
         # Reload config from device
         self.reload_lut_config(lut_id=lut_id)
@@ -380,9 +382,7 @@ class HallEffectEditor(BasicEditor):
         else:
             self.container.set_scale(self.container.get_scale() + 0.1)
 
-        self.refresh_key_display(
-            refresh_all=False
-        )
+        self.refresh_key_display()
 
     def rebuild(self, device):
         super().rebuild(device)
@@ -398,7 +398,7 @@ class HallEffectEditor(BasicEditor):
                 self.current_layer = 0
                 self.on_layout_changed()
                 # self.refresh_key_display()
-                # do not need to refresh, this is already done in on_layout_changed
+                # this is already called in on_layout_changed
 
             self.reload_lut_config()
             
@@ -447,16 +447,22 @@ class HallEffectEditor(BasicEditor):
 
             return config_text
 
-    def refresh_key_display(self, refresh_all=True, coordinate=(0,0)):
+    def refresh_key_display(self, coordinate=None):
         """ Refresh text on key widgets to display updated keymap """
         if "Key Config" in (self.keyboard.hall_effect_tabs if self.keyboard else []):
             self.container.update_layout()
 
             for widget in self.container.widgets:
-                if (refresh_all):
-                    widget.setText(self.code_for_widget(widget))
+                if coordinate is None:
+                    widget.setText(
+                        self.code_for_widget(widget),
+                        scale = 0.8
+                    )
                 elif (widget.desc.row, widget.desc.col) == coordinate:
-                    widget.setText(self.code_for_widget(widget))
+                    widget.setText(
+                        self.code_for_widget(widget),
+                        scale = 0.8
+                    )
 
             self.container.update()
             self.container.updateGeometry()
@@ -507,7 +513,6 @@ class HallEffectEditor(BasicEditor):
             self.last_click_count = 0  # Reset when no key is selected
 
         self.refresh_key_display(
-            refresh_all=False,
             coordinate=(row, col)
         )
 

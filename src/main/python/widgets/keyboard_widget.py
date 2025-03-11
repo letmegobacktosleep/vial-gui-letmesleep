@@ -19,6 +19,7 @@ class KeyWidget:
         self.pressed = False
         self.desc = desc
         self.text = ""
+        self.font_scale = 0.8
         self.mask_text = ""
         self.tooltip = ""
         self.color = None
@@ -172,8 +173,9 @@ class KeyWidget:
     def calculate_extra_draw_path(self):
         return QPainterPath()
 
-    def setText(self, text):
+    def setText(self, text, scale=1):
         self.text = text
+        self.font_scale = scale
 
     def setMaskText(self, text):
         self.mask_text = text
@@ -460,6 +462,9 @@ class KeyboardWidget(QWidget):
                 qp.drawText(key.mask_rect, Qt.AlignCenter, key.mask_text)
             else:
                 # draw the legend
+                key_font = qp.font()
+                key_font.setPointSize(round(key_font.pointSize() * key.font_scale))
+                qp.setFont(key_font)
                 qp.setPen(key.color if key.color else regular_pen)
                 qp.drawText(key.text_rect, Qt.AlignCenter, key.text)
 
