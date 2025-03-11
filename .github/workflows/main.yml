@@ -1,6 +1,7 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  workflow_dispatch:
 
 jobs:
   build-linux:
@@ -20,7 +21,7 @@ jobs:
   build-mac:
     runs-on: macos-13
     env:
-      PYTHON_VERSION: 3.6.8
+      PYTHON_VERSION: 3.10.9
       MACOSX_DEPLOYMENT_TARGET: 10.9
 
     steps:
