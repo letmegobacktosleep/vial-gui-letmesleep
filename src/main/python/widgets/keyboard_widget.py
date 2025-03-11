@@ -19,7 +19,7 @@ class KeyWidget:
         self.pressed = False
         self.desc = desc
         self.text = ""
-        self.font_scale = 0.8
+        self.font_scale = 1
         self.mask_text = ""
         self.tooltip = ""
         self.color = None
