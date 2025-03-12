@@ -1,7 +1,6 @@
 name: CI
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   build-linux:
@@ -21,7 +20,7 @@ jobs:
   build-mac:
     runs-on: macos-13
     env:
-      PYTHON_VERSION: 3.10.9
+      PYTHON_VERSION: 3.6.8
       MACOSX_DEPLOYMENT_TARGET: 10.9
 
     steps:
