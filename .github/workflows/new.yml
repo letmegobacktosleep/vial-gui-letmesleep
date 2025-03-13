@@ -43,7 +43,7 @@ jobs:
       run: |
         python3 -m venv venv
         source venv/bin/activate
-        pip install -r requirements.txt
+        pip install -r new_requirements.txt --no-dependencies
 
     - name: Build
       run: |
@@ -69,7 +69,7 @@ jobs:
       run: |
         python -m venv venv
         . .\venv\Scripts\activate.ps1
-        pip install -r requirements.txt
+        pip install -r new_requirements.txt --no-dependencies
 
     - name: Install NSIS
       run: |
