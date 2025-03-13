@@ -9,6 +9,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install dependencies
+      run: sudo apt-get install -y pkg-config
+
     - name: Build
       run: ./util/linux-builder/build-in-docker.sh
 
@@ -30,7 +33,7 @@ jobs:
       run: curl https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macos${MACOSX_DEPLOYMENT_TARGET}.pkg -o "python.pkg"
 
     - name: Verify download
-      run: shasum -a 256 -c <<< '4bcd53faffc98d193ef7cdccd5668de3829c702af4db45258819a84a2cab60d0 *python.pkg'
+      run: shasum -a 256 -c <<< 'b483b397473fb7e2a84efed2675af8ac55d3776d84a91133b3e284ccadf7ba03 *python.pkg'
 
     - name: Install Python
       run: |
