@@ -336,10 +336,8 @@ class HallEffectEditor(BasicEditor):
             self.channel_id,
             l_id
         )
-        
-        print(data)
+
         data = self.usb_send(self.device.dev, data, retries=20)
-        print(data)
 
         # Reload config from device
         self.reload_lut_config(lut_id=lut_id)

@@ -4,8 +4,8 @@ future==0.18.2
 hidapi==0.14.0.post4
 keyboard==0.13.5
 macholib==1.14
-pefile==2019.4.18
-PyInstaller==3.4
+pefile==2023.2.7
+PyInstaller==6.12.0
 PyQt5==5.15.11
 simpleeval==1.0.3
 sip==6.10.0
