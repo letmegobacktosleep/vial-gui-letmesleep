@@ -470,12 +470,10 @@ class HallEffectEditor(BasicEditor):
 
         row = 0
         col = 0
-        refresh_all = True
 
         if self.container.active_key:
             row = self.container.active_key.desc.row
             col = self.container.active_key.desc.col
-            refresh_all = False
 
             if (row, col) == self.last_clicked_key:
                 self.last_click_count += 1  # Increment click count if same key
