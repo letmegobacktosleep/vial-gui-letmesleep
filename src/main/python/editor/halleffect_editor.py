@@ -114,10 +114,10 @@ class HallEffectEditor(BasicEditor):
         self.last_click_count = 0
         self.integer_option_values = {
             "Mode": 2,
-            "Actuation Point":  75,
-            "Deadzone":         5,
-            "Up Sensitivity":   25,
-            "Down Sensitivity": 25,
+            "Actuation Point":  15,
+            "Deadzone":         1,
+            "Up Sensitivity":   5,
+            "Down Sensitivity": 5,
         }
 
         self.lut_options = {}
@@ -495,10 +495,10 @@ class HallEffectEditor(BasicEditor):
                     row,
                     col,
                     self.integer_option_values["Mode"],
-                    self.integer_option_values["Actuation Point"],
-                    self.integer_option_values["Deadzone"],
-                    self.integer_option_values["Up Sensitivity"],
-                    self.integer_option_values["Down Sensitivity"]
+                    5 * self.integer_option_values["Actuation Point"],
+                    5 * self.integer_option_values["Deadzone"],
+                    5 * self.integer_option_values["Up Sensitivity"],
+                    5 * self.integer_option_values["Down Sensitivity"]
                 )
 
                 data = self.usb_send(self.device.dev, data, retries=20)
