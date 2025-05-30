@@ -103,11 +103,14 @@ class HallEffectEditor(BasicEditor):
         self.command_id = 0xFF # id_unhandled
         self.channel_id = 0x00 # id_custom_channel
         self.sub_command_ids = {
-            "id_custom_get_key_config": 1,
-            "id_custom_set_key_config": 2,
-            "id_custom_get_lut_config": 3,
-            "id_custom_set_lut_config": 4,
-            "id_custom_save_lut_config": 5
+            "id_custom_get_key_config":    1,
+            "id_custom_set_key_config":    2,
+            "id_custom_get_lut_config":    3,
+            "id_custom_set_lut_config":    4,
+            "id_custom_save_lut_config":   5,
+            "id_custom_get_virtual_axes":  6,
+            "id_custom_set_virtual_axes":  7,
+            "id_custom_save_virtual_axes": 8
         }
 
         self.last_clicked_key = None
@@ -121,6 +124,7 @@ class HallEffectEditor(BasicEditor):
         }
 
         self.lut_options = {}
+        self.jst_options = {}
 
         self.tabs_widget = QTabWidget()
 
@@ -248,9 +252,167 @@ class HallEffectEditor(BasicEditor):
 
     def create_displacement_tab(self):
         return self.create_lut_options_tab(2)
-
+    
     def create_joystick_tab(self):
-        return self.create_lut_options_tab(3)
+        return self.create_joystick_options_tab()
+
+    def create_joystick_options_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+
+        # Grid layout for options
+        options_grid = QGridLayout()
+
+        # Define LUT options
+        va_fields = [
+            ("Deadzone",    1, 0, 0, 200),
+            ("Disable Key", 1, 1, 0, 1),
+            ("Row L Joystick Left",  2, 0,  0, 127),
+            ("Col L Joystick Left",  2, 4,  0, 127),
+            ("Row L Joystick Right", 2, 1,  0, 127),
+            ("Col L Joystick Right", 2, 5,  0, 127),
+            ("Row L Joystick Up",    2, 2,  0, 127),
+            ("Col L Joystick Up",    2, 6,  0, 127),
+            ("Row L Joystick Down",  2, 3,  0, 127),
+            ("Col L Joystick Down",  2, 7,  0, 127),
+            ("Row R Joystick Left",  2, 8,  0, 127),
+            ("Col R Joystick Left",  2, 12, 0, 127),
+            ("Row R Joystick Right", 2, 9,  0, 127),
+            ("Col R Joystick Right", 2, 13, 0, 127),
+            ("Row R Joystick Up",    2, 10, 0, 127),
+            ("Col R Joystick Up",    2, 14, 0, 127),
+            ("Row R Joystick Down",  2, 11, 0, 127),
+            ("Col R Joystick Down",  2, 15, 0, 127),
+            ("Row Mouse Left",   2, 0,  0, 127),
+            ("Col Mouse Left",   2, 4,  0, 127),
+            ("Row Mouse Right",  2, 1,  0, 127),
+            ("Col Mouse Right",  2, 5,  0, 127),
+            ("Row Mouse Up",     2, 2,  0, 127),
+            ("Col Mouse Up",     2, 6,  0, 127),
+            ("Row Mouse Down",   2, 3,  0, 127),
+            ("Col Mouse Down",   2, 7,  0, 127),
+            ("Row Scroll Left",  2, 8,  0, 127),
+            ("Col Scroll Left",  2, 12, 0, 127),
+            ("Row Scroll Right", 2, 9,  0, 127),
+            ("Col Scroll Right", 2, 13, 0, 127),
+            ("Row Scroll Up",    2, 10, 0, 127),
+            ("Col Scroll Up",    2, 14, 0, 127),
+            ("Row Scroll Down",  2, 11, 0, 127),
+            ("Col Scroll Down",  2, 15, 0, 127),
+        ]
+
+        for i, (label, axes_id, value_id, min_val, max_val, precision) in enumerate(va_fields):
+            opt = IntegerOption(label, options_grid, i, min_val=min_val, max_val=max_val)
+            
+            # Store option reference for later retrieval
+            self.jst_options[(axes_id, value_id)] = opt
+
+            # Connect change signal
+            opt.changed.connect(self.joystick_option_changed)
+
+        centered_layout = QVBoxLayout()
+        centered_layout.addLayout(options_grid)
+        centered_layout.setAlignment(Qt.AlignCenter)
+
+        layout.addLayout(centered_layout)
+
+        # Buttons Layout
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+
+        # Save Button
+        self.btn_save_joystick = QPushButton(tr("JST", "Save"))
+        self.btn_save_joystick.clicked.connect(lambda: self.save_joystick_config())
+        buttons_layout.addWidget(self.btn_save_joystick)
+
+        # Undo Button
+        self.btn_undo_joystick = QPushButton(tr("JST", "Reload"))
+        self.btn_undo_joystick.clicked.connect(lambda: self.reload_joystick_config())
+        buttons_layout.addWidget(self.btn_undo_joystick)
+
+        layout.addLayout(buttons_layout)
+        tab.setLayout(layout)
+
+        return tab
+    
+    def joystick_option_changed(self):
+        pass
+
+    def save_joystick_config(self):
+
+        """ Data Format
+        deadzone = 1 
+        1 byte -> deadzone
+        1 byte -> should ignore keycodes
+
+        joystick = 2
+        4 bytes -> left  rows
+        4 bytes -> left  cols
+        4 bytes -> right rows
+        4 bytes -> right cols
+
+        mouse    = 3
+        4 bytes -> mouse  rows
+        4 bytes -> mouse  cols
+        4 bytes -> scroll rows
+        4 bytes -> scroll cols
+        """
+
+        for axes_id in range(1, 4): # 1, 2, 3
+
+            value = [0 for i in range(0, 16)]
+
+            for (a_id, v_id), opt in self.jst_options.items():
+                if a_id == axes_id:
+                    value[v_id] = opt.value()
+
+            # Send values to the device
+            data = struct.pack(
+                "BBBBBBBBBBBBBBBBBBBB",
+                self.command_id,
+                self.sub_command_ids["id_custom_set_virtual_axes"],
+                self.channel_id,
+                axes_id,
+                value
+            )
+            
+            data = self.usb_send(self.device.dev, data, retries=20)
+            # print(f"Saved Joystick Values {value}")
+
+        # Send the save command
+        data = struct.pack(
+            "BBB",
+            self.command_id,
+            self.sub_command_ids["id_custom_save_virtual_axes"],
+            self.channel_id
+        )
+
+        data = self.usb_send(self.device.dev, data, retries=20)
+
+        # Reload config from device
+        self.reload_joystick_config()
+
+    def reload_joystick_config(self):
+        for axes_id in range(1, 4): # 1, 2, 3
+
+            # Fetch value from the device
+            data = struct.pack(
+                "BBBB",
+                self.command_id,
+                self.sub_command_ids["id_custom_get_virtual_axes"],
+                self.channel_id,
+                axes_id
+            )
+            
+            data = self.usb_send(self.device.dev, data, retries=20)
+
+            # Unpack the response
+            stored_value = struct.unpack("BBBBBBBBBBBBBBBB", data[4:20])
+            
+            for (a_id, v_id), opt in self.jst_options.items():
+                if a_id == axes_id:
+                    opt.set_value(stored_value[v_id])
+                    # print(f"Reset Joystick Value ID: {v_id} to {stored_value[v_id]}")
 
     def create_lut_options_tab(self, lut_id):
         tab = QWidget()
@@ -265,7 +427,7 @@ class HallEffectEditor(BasicEditor):
             ("Parameter B", 2, -100, 100, 16),
             ("Parameter C", 3, -100, 100, 16),
             ("Parameter D", 4, -1000, 1000, 16),
-            ("Max Input", 5, 0, 2047, 0),
+            ("Max Input",  5, 0, 2047, 0),
             ("Max Output", 6, 0, 2047, 0),
         ]
 
@@ -289,14 +451,14 @@ class HallEffectEditor(BasicEditor):
         buttons_layout.addStretch()
 
         # Save Button
-        self.btn_save = QPushButton(tr("LUT", "Save"))
-        self.btn_save.clicked.connect(lambda: self.save_lut_config(lut_id))
-        buttons_layout.addWidget(self.btn_save)
+        self.btn_save_lut = QPushButton(tr("LUT", "Save"))
+        self.btn_save_lut.clicked.connect(lambda: self.save_lut_config(lut_id))
+        buttons_layout.addWidget(self.btn_save_lut)
 
         # Undo Button
-        self.btn_undo = QPushButton(tr("LUT", "Reload"))
-        self.btn_undo.clicked.connect(lambda: self.reload_lut_config(lut_id=lut_id))
-        buttons_layout.addWidget(self.btn_undo)
+        self.btn_undo_lut = QPushButton(tr("LUT", "Reload"))
+        self.btn_undo_lut.clicked.connect(lambda: self.reload_lut_config(lut_id=lut_id))
+        buttons_layout.addWidget(self.btn_undo_lut)
 
         layout.addLayout(buttons_layout)
         tab.setLayout(layout)
