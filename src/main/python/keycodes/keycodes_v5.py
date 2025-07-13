@@ -548,7 +548,8 @@ class keycodes_v5:
         "MI_BENDD": 0x5CB9,
         "MI_BENDU": 0x5CBA,
 
-        "RESET": 0x5C00,
+        "QK_BOOT": 0x5C00,
+        "QK_CLEAR_EEPROM": 0x5CDF,
 
         "FN_MO13": 0x5F10,
         "FN_MO23": 0x5F11,
@@ -574,6 +575,13 @@ class keycodes_v5:
         "RM_VALD": 0x999a,
         "RM_SPDU": 0x999b,
         "RM_SPDD": 0x999c,
+        "QK_REBOOT": 0x999d,
+
+        "QK_CAPS_WORD_TOGGLE": 0x999e,
+        "QK_LAYER_LOCK": 0x999f,
+        "QK_PERSISTENT_DEF_LAYER": 0x999a0,  # Reserve 0x999a0 - 0x999bf.
+        "QK_REPEAT_KEY": 0x999c0,
+        "QK_ALT_REPEAT_KEY": 0x999c1,
     }
 
     masked = set()
@@ -590,11 +598,13 @@ for x in range(32):
     keycodes_v5.kc["TT({})".format(x)] = keycodes_v5.kc["QK_LAYER_TAP_TOGGLE"] | x
     keycodes_v5.kc["OSL({})".format(x)] = keycodes_v5.kc["QK_ONE_SHOT_LAYER"] | x
     keycodes_v5.kc["TO({})".format(x)] = keycodes_v5.kc["QK_TO"] | (1 << 4) | x
+    keycodes_v5.kc["PDF({})".format(x)] = keycodes_v5.kc["QK_PERSISTENT_DEF_LAYER"] + x
 
 for x in range(16):
     keycodes_v5.kc["LT{}(kc)".format(x)] = keycodes_v5.kc["QK_LAYER_TAP"] | (((x) & 0xF) << 8)
 
-for x in range(16):
+#TODO(userkeycodes): temp workaround, keycodes handling is messy, rework this later
+for x in range(64):
     keycodes_v5.kc["USER{:02}".format(x)] = keycodes_v5.kc["QK_KB"] + x
 
 for name, val in keycodes_v5.kc.items():

@@ -14,10 +14,12 @@ class Keycode:
     recorder_alias_to_keycode = dict()
     qmk_id_to_keycode = dict()
     protocol = 0
+    hidden = False
 
-    def __init__(self, qmk_id, label, tooltip=None, masked=False, printable=None, recorder_alias=None, alias=None):
+    def __init__(self, qmk_id, label, tooltip=None, masked=False, printable=None, recorder_alias=None, alias=None, requires_feature=None):
         self.qmk_id = qmk_id
         self.qmk_id_to_keycode[qmk_id] = self
+        self.requires_feature = requires_feature
         self.label = label
         # we cannot embed full CJK fonts due to large size, workaround like this for now
         if sys.platform == "emscripten" and not label.isascii() and qmk_id != "KC_TRNS":
@@ -156,6 +158,12 @@ class Keycode:
         if qmk_constant not in kc:
             raise RuntimeError("unable to resolve qmk_id={}".format(qmk_constant))
         return kc[qmk_constant]
+
+    def is_supported_by(self, keyboard):
+      """ Whether the keycode is supported by the keyboard. """
+      if self.requires_feature is None:
+        return True
+      return self.requires_feature in keyboard.supported_features
 
 
 K = Keycode
@@ -326,10 +334,12 @@ KEYCODES_ISO_KR = [
 KEYCODES_ISO.extend(KEYCODES_ISO_KR)
 
 KEYCODES_LAYERS = []
-RESET_KEYCODE = "RESET"
+RESET_KEYCODE = "QK_BOOT"
 
 KEYCODES_BOOT = [
-    K("RESET", "Reset", "Reboot to bootloader")
+    K("QK_BOOT", "Boot-\nloader", "Put the keyboard into bootloader mode for flashing", alias=["RESET"]),
+    K("QK_REBOOT", "Reboot", "Reboots the keyboard. Does not load the bootloader"),
+    K("QK_CLEAR_EEPROM", "Clear\nEEPROM", "Reinitializes the keyboard's EEPROM (persistent memory)", alias=["EE_CLR"]),
 ]
 
 KEYCODES_MODIFIERS = [
@@ -480,6 +490,10 @@ KEYCODES_QUANTUM = [
     K("CMB_ON", "Combo\nOn", "Turns on Combo feature"),
     K("CMB_OFF", "Combo\nOff", "Turns off Combo feature"),
     K("CMB_TOG", "Combo\nToggle", "Toggles Combo feature on and off"),
+
+    K("QK_CAPS_WORD_TOGGLE", "Caps\nWord", "Capitalizes until end of current word", alias=["CW_TOGG"], requires_feature="caps_word"),
+    K("QK_REPEAT_KEY", "Repeat", "Repeats the last pressed key", alias=["QK_REP"], requires_feature="repeat_key"),
+    K("QK_ALT_REPEAT_KEY", "Alt\nRepeat", "Alt repeats the last pressed key", alias=["QK_AREP"], requires_feature="repeat_key"),
 ]
 
 KEYCODES_BACKLIGHT = [
@@ -843,14 +857,16 @@ def recreate_keyboard_keycodes(keyboard):
 
     layers = keyboard.layers
 
-    def generate_keycodes_for_mask(label, description):
+    def generate_keycodes_for_mask(label, description, requires_feature=None):
         keycodes = []
         for layer in range(layers):
             lbl = "{}({})".format(label, layer)
-            keycodes.append(Keycode(lbl, lbl, description))
+            keycodes.append(Keycode(lbl, lbl, description, requires_feature=requires_feature))
         return keycodes
 
     KEYCODES_LAYERS.clear()
+    KEYCODES_LAYERS.append(Keycode("QK_LAYER_LOCK", "Layer\nLock",
+            "Locks the current layer", alias=["QK_LLCK"], requires_feature="layer_lock"))
 
     if layers >= 4:
         KEYCODES_LAYERS.append(Keycode("FN_MO13", "Fn1\n(Fn3)"))
@@ -862,6 +878,10 @@ def recreate_keyboard_keycodes(keyboard):
     KEYCODES_LAYERS.extend(
         generate_keycodes_for_mask("DF",
                                    "Set the base (default) layer"))
+    KEYCODES_LAYERS.extend(
+        generate_keycodes_for_mask("PDF",
+                                   "Persistently set the base (default) layer",
+                                   requires_feature="persistent_default_layer"))
     KEYCODES_LAYERS.extend(
         generate_keycodes_for_mask("TG",
                                    "Toggle layer on or off"))
@@ -901,6 +921,10 @@ def recreate_keyboard_keycodes(keyboard):
     create_midi_keycodes(keyboard.midi)
 
     recreate_keycodes()
+
+    # Hide keycodes where .requires_feature isn't supported by the keyboard.
+    for kc in KEYCODES:
+        kc.hidden = not kc.is_supported_by(keyboard)
 
 
 recreate_keycodes()
